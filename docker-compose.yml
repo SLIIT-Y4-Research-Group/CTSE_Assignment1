@@ -1,0 +1,93 @@
+services:
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: user-service
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./services/user-service/.env
+    networks:
+      - ems-network
+
+  event-service:
+    build:
+      context: ./services/event-service
+    container_name: event-service
+    ports:
+      - "3002:3000"
+    env_file:
+      - ./services/event-service/.env
+    networks:
+      - ems-network
+
+  ticket-service:
+    build:
+      context: ./services/ticket-service
+    container_name: ticket-service
+    ports:
+      - "3003:3000"
+    env_file:
+      - ./services/ticket-service/.env
+    networks:
+      - ems-network
+    depends_on:
+      - event-service
+      - payment-service
+      - notification-service
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+    container_name: payment-service
+    ports:
+      - "3004:3000"
+    env_file:
+      - ./services/payment-service/.env
+    networks:
+      - ems-network
+    depends_on:
+      - notification-service
+      - reporting-service
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: notification-service
+    ports:
+      - "3005:3000"
+    env_file:
+      - ./services/notification-service/.env
+    networks:
+      - ems-network
+
+  reporting-service:
+    build:
+      context: ./services/reporting-service
+    container_name: reporting-service
+    ports:
+      - "3006:3000"
+    env_file:
+      - ./services/reporting-service/.env
+    networks:
+      - ems-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:80"
+    depends_on:
+      - user-service
+      - event-service
+      - ticket-service
+      - payment-service
+      - notification-service
+      - reporting-service
+    networks:
+      - ems-network
+
+networks:
+  ems-network:
+    driver: bridge
