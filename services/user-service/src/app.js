@@ -4,10 +4,17 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const swaggerUi = require("swagger-ui-express");
+
+const { ensureDefaultRoles } = require("./utils/ensureRoles");
+const { swaggerSpec } = require("./utils/swagger");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const roleRoutes = require("./routes/roleRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SERVICE_NAME = process.env.SERVICE_NAME || "service";
+const SERVICE_NAME = process.env.SERVICE_NAME || "user-service";
 const MONGO_URI = process.env.MONGO_URI;
 
 app.use(helmet());
@@ -17,8 +24,9 @@ app.use(morgan("dev"));
 
 mongoose
   .connect(MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log(`${SERVICE_NAME} connected to MongoDB Atlas`);
+    await ensureDefaultRoles();
   })
   .catch((err) => {
     console.error(`${SERVICE_NAME} DB connection error: ${err.message}`);
@@ -46,6 +54,16 @@ app.get("/db-check", (req, res) => {
     dbConnected: state === 1,
     mongoState: state
   });
+});
+
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ message: "Internal server error" });
 });
 
 app.listen(PORT, () => {
