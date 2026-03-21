@@ -4,10 +4,15 @@ const User = require("../models/User");
 const Role = require("../models/Role");
 
 function signToken(user) {
+  const roleId = user.role?._id
+    ? user.role._id.toString()
+    : user.role?.toString();
+  const roleName = user.role?.name;
+
   return jwt.sign(
-    { sub: user._id.toString(), roleId: user.role.toString() },
+    { sub: user._id.toString(), roleId, roleName },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
+    { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
   );
 }
 
@@ -15,7 +20,9 @@ async function register(req, res) {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
-    return res.status(400).json({ message: "name, email, and password are required" });
+    return res
+      .status(400)
+      .json({ message: "name, email, and password are required" });
   }
 
   const existing = await User.findOne({ email: email.toLowerCase() });
@@ -33,10 +40,11 @@ async function register(req, res) {
     name,
     email,
     passwordHash,
-    role: role._id
+    role: role._id,
   });
 
-  const token = signToken(user);
+  const userWithRole = await User.findById(user._id).populate("role");
+  const token = signToken(userWithRole || user);
   return res.status(201).json({ user: user.toJSON(), token });
 }
 
@@ -47,7 +55,9 @@ async function login(req, res) {
     return res.status(400).json({ message: "email and password are required" });
   }
 
-  const user = await User.findOne({ email: email.toLowerCase() }).populate("role");
+  const user = await User.findOne({ email: email.toLowerCase() }).populate(
+    "role",
+  );
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials" });
   }
@@ -65,7 +75,11 @@ async function login(req, res) {
   await user.save();
 
   const token = signToken(user);
-  return res.json({ user: user.toJSON(), token, mustChangePassword: user.mustChangePassword });
+  return res.json({
+    user: user.toJSON(),
+    token,
+    mustChangePassword: user.mustChangePassword,
+  });
 }
 
 module.exports = { register, login };
