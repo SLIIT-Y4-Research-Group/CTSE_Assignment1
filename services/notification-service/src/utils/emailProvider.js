@@ -40,8 +40,14 @@ async function sendEmail({ to, subject, text, html, opts = {} }) {
   }
 
   const transporter = buildTransport();
+  const defaultFrom = process.env.EMAIL_USER
+    ? `EventHub <${process.env.EMAIL_USER}>`
+    : undefined;
   const fromAddress =
-    opts.from || process.env.EMAIL_FROM || process.env.MAIL_FROM || process.env.EMAIL_USER;
+    opts.from ||
+    process.env.EMAIL_FROM ||
+    process.env.MAIL_FROM ||
+    defaultFrom;
 
   if (!fromAddress) {
     const err = new Error("EMAIL_FROM or EMAIL_USER is not configured");
