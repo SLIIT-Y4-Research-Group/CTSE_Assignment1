@@ -1,0 +1,4 @@
+PORT=3000
+SERVICE_NAME=event-service
+
+MONGO_URI=mongodb+srv://dew:dew123@cluster0.ipvuvy1.mongodb.net/event_service_db?appName=Cluster0
