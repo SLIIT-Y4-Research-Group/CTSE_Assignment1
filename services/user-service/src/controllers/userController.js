@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const Role = require("../models/Role");
+const { sendNewUserEmail } = require("../utils/notificationClient");
 
 async function getMe(req, res) {
   return res.json({ user: req.user.toJSON() });
@@ -75,8 +76,23 @@ async function createUser(req, res) {
     role: role._id,
     mustChangePassword: true
   });
-
-  return res.status(201).json({ user: user.toJSON() });
+  console.log(`Created user ${user.email} with role ${role.name}`);
+  let emailStatus = "sent";
+  try {
+    console.log(`Sending notification email to ${email}...`);
+    await sendNewUserEmail({
+      to: email,
+      name,
+      email,
+      password: defaultPassword,
+      roleName: role.name
+    });
+  } catch (err) {
+    console.error(`Failed to send notification email to ${email}:`, err.message);
+    emailStatus = "failed";
+  }
+  console.log(`User ${email} created successfully. Email status: ${emailStatus}`);
+  return res.status(201).json({ user: user.toJSON(), emailStatus });
 }
 
 async function updateUserRole(req, res) {

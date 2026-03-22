@@ -4,12 +4,32 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const http = require("http");
+const { Server } = require("socket.io");
 const swaggerUi = require("swagger-ui-express");
 
 const notificationRoutes = require("./routes/notificationRoutes");
 const { swaggerSpec } = require("./utils/swagger");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on("connection", (socket) => {
+  socket.on("join", ({ userId }) => {
+    if (userId) {
+      socket.join(userId);
+    }
+  });
+});
+
+app.locals.io = io;
+
 const PORT = process.env.PORT || 3000;
 const SERVICE_NAME = process.env.SERVICE_NAME || "notification-service";
 const MONGO_URI = process.env.MONGO_URI;
@@ -60,6 +80,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal server error" });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`${SERVICE_NAME} running on port ${PORT}`);
 });
