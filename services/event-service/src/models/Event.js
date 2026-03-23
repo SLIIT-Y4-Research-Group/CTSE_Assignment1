@@ -25,6 +25,7 @@ const EventSchema = new mongoose.Schema(
     is_featured: { type: Boolean, default: false },
 
     organizer_id: { type: String, required: true },
+    organizer_contact_email: { type: String },
 
     status: {
       type: String,
