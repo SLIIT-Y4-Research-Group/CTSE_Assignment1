@@ -1,7 +1,10 @@
 const express = require("express");
 const {
+  uploadBanner,
   createEvent,
   getAllEvents,
+  getAllEventsForManagement,
+  searchEventsForManagement,
   getFeaturedEvents,
   getUpcomingEvents,
   getEventsByOrganizer,
@@ -14,6 +17,7 @@ const {
   cancelEvent,
 } = require("../controllers/eventController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
+const { uploadBannerMiddleware } = require("../middleware/uploadBanner");
 
 const router = express.Router();
 
@@ -89,7 +93,19 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post("/events", requireAuth, requireRole(["event_manager", "admin"]), createEvent);
+router.post(
+  "/events",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  createEvent,
+);
+router.post(
+  "/events/upload-banner",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  uploadBannerMiddleware,
+  uploadBanner,
+);
 
 /**
  * @openapi
@@ -112,6 +128,18 @@ router.post("/events", requireAuth, requireRole(["event_manager", "admin"]), cre
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events", getAllEvents);
+router.get(
+  "/events/manage/all",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  getAllEventsForManagement,
+);
+router.get(
+  "/events/manage/search",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  searchEventsForManagement,
+);
 
 /**
  * @openapi
@@ -356,7 +384,7 @@ router.patch(
   "/events/:id/publish",
   requireAuth,
   requireRole(["event_manager", "admin"]),
-  publishEvent
+  publishEvent,
 );
 
 /**
@@ -402,7 +430,7 @@ router.patch(
   "/events/:id/cancel",
   requireAuth,
   requireRole(["event_manager", "admin"]),
-  cancelEvent
+  cancelEvent,
 );
 
 /**
@@ -464,7 +492,12 @@ router.patch(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), updateEvent);
+router.put(
+  "/events/:id",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  updateEvent,
+);
 
 /**
  * @openapi
@@ -505,6 +538,11 @@ router.put("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), 
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), deleteEvent);
+router.delete(
+  "/events/:id",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  deleteEvent,
+);
 
 module.exports = router;

@@ -7,6 +7,7 @@ const {
   cancelEventTickets,
   getEventTicketSummary,
 } = require("../utils/ticketClient");
+const { uploadBufferToCloudinary } = require("../utils/cloudinary");
 
 function getEventDisplayName(event) {
   return event.title || event.event_name || "Your event";
@@ -107,8 +108,96 @@ function buildEmailHtml({
 </div>`.trim();
 }
 
+function getAuthenticatedUserId(req) {
+  return req.user?.id || req.user?._id || req.user?.sub || null;
+}
+
+function getAuthenticatedUserRole(req) {
+  return req.user?.role || req.user?.roleName || null;
+}
+
+function canManageEvent(req, event) {
+  const userRole = getAuthenticatedUserRole(req);
+
+  if (userRole === "admin" || userRole === "event_manager") {
+    return true;
+  }
+
+  return false;
+}
+
+function buildEventSearchFilter(query, { allowStatus = false } = {}) {
+  const { city, category, date, status } = query;
+  const filter = {};
+
+  if (city) {
+    filter.city = { $regex: city.trim(), $options: "i" };
+  }
+
+  if (category) {
+    filter.category = { $regex: category.trim(), $options: "i" };
+  }
+
+  if (date) {
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return { error: "Invalid date query parameter" };
+    }
+
+    const startOfDay = new Date(parsedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(parsedDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    filter.date = { $gte: startOfDay, $lte: endOfDay };
+  }
+
+  if (allowStatus && status) {
+    const allowedStatuses = ["draft", "published", "cancelled", "completed"];
+
+    if (!allowedStatuses.includes(status)) {
+      return {
+        error:
+          "Invalid status query parameter. Allowed values: draft, published, cancelled, completed",
+      };
+    }
+
+    filter.status = status;
+  }
+
+  return { filter };
+}
+
+async function uploadBanner(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No banner file uploaded" });
+    }
+
+    const uploadedImage = await uploadBufferToCloudinary(req.file.buffer);
+
+    return res.status(201).json({
+      message: "Banner uploaded successfully",
+      imageUrl: uploadedImage.secure_url,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Banner upload failed", error: err.message });
+  }
+}
+
 async function createEvent(req, res) {
   const payload = { ...req.body };
+  const authenticatedUserId = getAuthenticatedUserId(req);
+
+  if (!authenticatedUserId) {
+    return res.status(401).json({ message: "Authenticated user ID not found" });
+  }
+
+  payload.organizer_id = authenticatedUserId;
 
   if (!payload.title && payload.event_name) {
     payload.title = payload.event_name;
@@ -186,6 +275,36 @@ async function getAllEvents(req, res) {
   }
 }
 
+async function getAllEventsForManagement(req, res) {
+  try {
+    const events = await Event.find({}).sort({ createdAt: -1 });
+    return res.json({ events });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch events", error: err.message });
+  }
+}
+
+async function searchEventsForManagement(req, res) {
+  try {
+    const { filter, error } = buildEventSearchFilter(req.query, {
+      allowStatus: true,
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
+
+    const events = await Event.find(filter).sort({ createdAt: -1 });
+    return res.json({ events });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Failed to search events", error: err.message });
+  }
+}
+
 async function getEventById(req, res) {
   const { id } = req.params;
 
@@ -215,6 +334,12 @@ async function updateEvent(req, res) {
     const originalEvent = await Event.findById(id);
     if (!originalEvent) {
       return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (!canManageEvent(req, originalEvent)) {
+      return res
+        .status(403)
+        .json({ message: "You are not allowed to manage this event" });
     }
 
     const event = await Event.findByIdAndUpdate(id, req.body, {
@@ -340,6 +465,12 @@ async function deleteEvent(req, res) {
       return res.status(404).json({ message: "Event not found" });
     }
 
+    if (!canManageEvent(req, existingEvent)) {
+      return res
+        .status(403)
+        .json({ message: "You are not allowed to manage this event" });
+    }
+
     try {
       const ticketSummary = await getEventTicketSummary(id);
       console.log(
@@ -423,35 +554,11 @@ async function deleteEvent(req, res) {
 }
 
 async function searchEvents(req, res) {
-  const { city, category, date } = req.query;
-
   try {
-    const filter = {};
+    const { filter, error } = buildEventSearchFilter(req.query);
 
-    if (city) {
-      filter.city = { $regex: city.trim(), $options: "i" };
-    }
-
-    if (category) {
-      filter.category = { $regex: category.trim(), $options: "i" };
-    }
-
-    if (date) {
-      const parsedDate = new Date(date);
-
-      if (Number.isNaN(parsedDate.getTime())) {
-        return res
-          .status(400)
-          .json({ message: "Invalid date query parameter" });
-      }
-
-      const startOfDay = new Date(parsedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date(parsedDate);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      filter.date = { $gte: startOfDay, $lte: endOfDay };
+    if (error) {
+      return res.status(400).json({ message: error });
     }
 
     const events = await Event.find(filter).sort({ date: 1 });
@@ -515,6 +622,12 @@ async function publishEvent(req, res) {
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (!canManageEvent(req, event)) {
+      return res
+        .status(403)
+        .json({ message: "You are not allowed to manage this event" });
     }
 
     if (req.body?.organizer_contact_email) {
@@ -591,6 +704,12 @@ async function cancelEvent(req, res) {
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (!canManageEvent(req, event)) {
+      return res
+        .status(403)
+        .json({ message: "You are not allowed to manage this event" });
     }
 
     if (req.body?.organizer_contact_email) {
@@ -706,8 +825,11 @@ async function getUpcomingEvents(req, res) {
 }
 
 module.exports = {
+  uploadBanner,
   createEvent,
   getAllEvents,
+  getAllEventsForManagement,
+  searchEventsForManagement,
   getEventById,
   updateEvent,
   deleteEvent,
