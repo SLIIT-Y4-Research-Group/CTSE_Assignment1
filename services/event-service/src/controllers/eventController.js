@@ -3,6 +3,10 @@ const {
   sendEventEmailNotification,
   sendEventSmsNotification,
 } = require("../utils/notificationClient");
+const {
+  cancelEventTickets,
+  getEventTicketSummary,
+} = require("../utils/ticketClient");
 
 function getEventDisplayName(event) {
   return event.title || event.event_name || "Your event";
@@ -330,6 +334,34 @@ async function deleteEvent(req, res) {
   const { id } = req.params;
 
   try {
+    const existingEvent = await Event.findById(id);
+
+    if (!existingEvent) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    try {
+      const ticketSummary = await getEventTicketSummary(id);
+      console.log(
+        `[deleteEvent] ticket summary for event ${id}: ${JSON.stringify(ticketSummary)}`,
+      );
+
+      const totalSold = Number(ticketSummary?.total_sold || 0);
+      if (totalSold > 0) {
+        return res.status(409).json({
+          message:
+            "Cannot delete event because tickets are already sold for this event",
+        });
+      }
+    } catch (ticketErr) {
+      console.error(
+        `[deleteEvent] failed to verify ticket status for event ${id}: ${ticketErr.message}`,
+      );
+      return res.status(502).json({
+        message: "Unable to verify ticket status before deleting event",
+      });
+    }
+
     const event = await Event.findByIdAndDelete(id);
 
     if (!event) {
@@ -568,6 +600,20 @@ async function cancelEvent(req, res) {
     event.status = "cancelled";
     event.is_published = false;
     await event.save();
+
+    // After the event is marked cancelled, request Ticket Service to cancel ticket sales.
+    try {
+      const ticketServiceResponse = await cancelEventTickets(
+        event._id.toString(),
+      );
+      console.log(
+        `[cancelEvent] Ticket Service bulk cancel success for event ${event._id}: ${JSON.stringify(ticketServiceResponse)}`,
+      );
+    } catch (ticketErr) {
+      console.error(
+        `[cancelEvent] Ticket Service bulk cancel failed for event ${event._id}: ${ticketErr.message}`,
+      );
+    }
 
     console.log(
       `[cancelEvent] organizer_contact_email for event ${event._id}: ${event.organizer_contact_email || "<empty>"}`,
