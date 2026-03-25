@@ -1,17 +1,23 @@
 const Ticket = require("../models/Ticket");
-const { verifyEvent } = require("../utils/eventService");
+//const { verifyEvent } = require("../utils/eventService");
+const Event = require("../models/Event");
 
 exports.createTicket = async (req, res) => {
   try {
     const { event_id } = req.body;
 
-    // Verify event exists in Event Service
-    await verifyEvent(event_id);
+    // Check if event exists directly in DB
+    const event = await Event.findById(event_id);
+    if (!event) {
+      return res.status(400).json({ message: "Event not found" });
+    }
 
+    // Create ticket
     const ticket = await Ticket.create(req.body);
     res.status(201).json(ticket);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Ticket creation failed:", error.message);
+    res.status(500).json({ message: "Ticket creation failed" });
   }
 };
 
