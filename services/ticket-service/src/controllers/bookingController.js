@@ -1,14 +1,15 @@
 const Booking = require('../models/Booking');
 const Ticket = require('../models/Ticket');
 const { generateBookingReference } = require('../utils/helpers');
-const { getUserById } = require('../utils/userService');
+//const { getUserById } = require('../utils/userService');
+const User = require("../models/User");
 
 exports.bookTickets = async (req, res) => {
   const { user_id, tickets } = req.body;
 
   try {
     // Verify user exists via User Service
-    const user = await getUserById(user_id);
+    const user = await User.findById(user_id);
     if (!user) {
       return res.status(400).json({ message: 'User not found' });
     }

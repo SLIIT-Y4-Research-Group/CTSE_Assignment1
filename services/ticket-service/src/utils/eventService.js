@@ -2,10 +2,13 @@ const axios = require('axios');
 
 const verifyEvent = async (eventId) => {
   try {
-    // This calls the Event Service API to check if the event exists
-    const res = await axios.get(`${process.env.EVENT_SERVICE_URL}/${eventId}`);
+    const url = `${process.env.GATEWAY_URL}/${eventId}/`;
+    console.log("Calling Event via Gateway:", url);
+
+    const res = await axios.get(url);
     return res.data;
   } catch (error) {
+    console.error("Event verification failed:", error.message);
     throw new Error('Event not found or service unavailable');
   }
 };
