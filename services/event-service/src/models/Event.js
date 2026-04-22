@@ -18,7 +18,15 @@ const EventSchema = new mongoose.Schema(
     venue_name: { type: String, required: true, trim: true },
     city: { type: String, required: true, trim: true },
 
-    category: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      required: true,
+      trim: true,
+      enum: {
+        values: ["Concerts", "Theatre", "Family"],
+        message: "Category must be one of: Concerts, Theatre, Family",
+      },
+    },
 
     banner_image: { type: String },
 

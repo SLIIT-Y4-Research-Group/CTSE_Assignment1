@@ -21,6 +21,13 @@ const { uploadBannerMiddleware } = require("../middleware/uploadBanner");
 
 const router = express.Router();
 
+function logCreateEventRouteEntry(req, res, next) {
+  console.log(
+    `[route:createEvent] ${req.method} ${req.originalUrl} bodyKeys=${Object.keys(req.body || {}).join(",")}`,
+  );
+  return next();
+}
+
 /**
  * @openapi
  * /api/events:
@@ -54,6 +61,7 @@ const router = express.Router();
  *                 type: string
  *               category:
  *                 type: string
+ *                 enum: [Concerts, Theatre, Family]
  *               banner_image:
  *                 type: string
  *               is_featured:
@@ -69,7 +77,7 @@ const router = express.Router();
  *             time: 10:00 AM
  *             venue_name: Grand Expo Center
  *             city: Colombo
- *             category: Technology
+ *             category: Concerts
  *             banner_image: https://cdn.example.com/events/tech-summit.jpg
  *             is_featured: true
  *             organizer_id: org_1001
@@ -95,6 +103,7 @@ const router = express.Router();
  */
 router.post(
   "/events",
+  logCreateEventRouteEntry,
   requireAuth,
   requireRole(["event_manager", "admin"]),
   createEvent,
@@ -201,6 +210,7 @@ router.get("/events/upcoming", getUpcomingEvents);
  *         name: category
  *         schema:
  *           type: string
+ *           enum: [Concerts, Theatre, Family]
  *         description: Event category filter
  *       - in: query
  *         name: date
@@ -340,6 +350,7 @@ router.get("/events/:id", getEventById);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events/:id/validate", validateEvent);
+router.get("/events/:eventId/validate", validateEvent);
 
 /**
  * @openapi

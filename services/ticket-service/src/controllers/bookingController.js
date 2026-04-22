@@ -1,17 +1,18 @@
-const Booking = require('../models/Booking');
-const Ticket = require('../models/Ticket');
-const { generateBookingReference } = require('../utils/helpers');
-//const { getUserById } = require('../utils/userService');
-const User = require("../models/User");
+const Booking = require("../models/Booking");
+const Ticket = require("../models/Ticket");
+const { generateBookingReference } = require("../utils/helpers");
 
 exports.bookTickets = async (req, res) => {
-  const { user_id, tickets } = req.body;
+  const { tickets } = req.body;
+  const user_id = req.user?.id;
 
   try {
-    // Verify user exists via User Service
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+    if (!user_id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!Array.isArray(tickets) || tickets.length === 0) {
+      return res.status(400).json({ message: "tickets are required" });
     }
 
     let totalAmount = 0;
@@ -21,7 +22,8 @@ exports.bookTickets = async (req, res) => {
       const ticket = await Ticket.findById(item.ticket_id);
 
       const available = ticket.quantity - ticket.sold;
-      if (available < item.quantity) return res.status(400).json({ message: 'Not enough tickets' });
+      if (available < item.quantity)
+        return res.status(400).json({ message: "Not enough tickets" });
 
       ticket.sold += item.quantity;
       await ticket.save();
@@ -31,7 +33,7 @@ exports.bookTickets = async (req, res) => {
       ticketDetails.push({
         ticket_id: ticket._id,
         quantity: item.quantity,
-        price_at_booking: ticket.price
+        price_at_booking: ticket.price,
       });
     }
 
@@ -39,18 +41,19 @@ exports.bookTickets = async (req, res) => {
       user_id,
       tickets: ticketDetails,
       total_amount: totalAmount,
-      booking_reference: generateBookingReference()
+      booking_reference: generateBookingReference(),
     });
 
     res.status(201).json(booking);
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getBookingDetails = async (req, res) => {
-  const booking = await Booking.findById(req.params.id).populate('tickets.ticket_id');
+  const booking = await Booking.findById(req.params.id).populate(
+    "tickets.ticket_id",
+  );
   res.json(booking);
 };
 
@@ -68,11 +71,11 @@ exports.cancelBooking = async (req, res) => {
     await ticket.save();
   }
 
-  booking.booking_status = 'CANCELLED';
+  booking.booking_status = "CANCELLED";
   booking.cancelled_at = new Date();
   await booking.save();
 
-  res.json({ message: 'Booking cancelled' });
+  res.json({ message: "Booking cancelled" });
 };
 
 exports.confirmPayment = async (req, res) => {
@@ -80,8 +83,8 @@ exports.confirmPayment = async (req, res) => {
 
   const booking = await Booking.findById(bookingId);
 
-  booking.payment_status = 'PAID';
-  booking.booking_status = 'CONFIRMED';
+  booking.payment_status = "PAID";
+  booking.booking_status = "CONFIRMED";
   booking.payment_id = payment_id;
 
   await booking.save();

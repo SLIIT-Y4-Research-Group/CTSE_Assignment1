@@ -2,7 +2,16 @@ const axios = require("axios");
 
 // Ticket Service is accessed through API Gateway in this architecture.
 const TICKET_SERVICE_URL =
-  process.env.TICKET_SERVICE_URL || "http://api-gateway:80/api/tickets";
+  process.env.TICKET_SERVICE_URL || "http://api-gateway:80";
+
+function getTicketServiceErrorMessage(err) {
+  const responseMessage = err.response?.data?.message;
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  return err.message;
+}
 
 async function cancelEventTickets(eventId) {
   const url = `${TICKET_SERVICE_URL}/api/tickets/event/${eventId}/cancel`;
@@ -12,7 +21,7 @@ async function cancelEventTickets(eventId) {
     return response.data;
   } catch (err) {
     throw new Error(
-      `Failed to cancel tickets for event ${eventId}: ${err.message}`,
+      `Failed to cancel tickets for event ${eventId}: ${getTicketServiceErrorMessage(err)}`,
     );
   }
 }
@@ -25,7 +34,7 @@ async function getEventTicketSummary(eventId) {
     return response.data;
   } catch (err) {
     throw new Error(
-      `Failed to fetch ticket summary for event ${eventId}: ${err.message}`,
+      `Failed to fetch ticket summary for event ${eventId}: ${getTicketServiceErrorMessage(err)}`,
     );
   }
 }

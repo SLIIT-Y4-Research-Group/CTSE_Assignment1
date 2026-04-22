@@ -190,6 +190,10 @@ async function uploadBanner(req, res) {
 }
 
 async function createEvent(req, res) {
+  console.log(
+    `[createEvent] controller start requestId=${req.headers["x-request-id"] || "n/a"} userId=${getAuthenticatedUserId(req) || "n/a"}`,
+  );
+
   const payload = { ...req.body };
   const authenticatedUserId = getAuthenticatedUserId(req);
 
@@ -204,11 +208,26 @@ async function createEvent(req, res) {
   }
 
   if (!payload.slug) {
+    console.warn("[createEvent] missing required field: slug");
     return res.status(400).json({ message: "slug is required" });
   }
 
   try {
+    console.log(
+      `[createEvent] before Event.create payload=${JSON.stringify({
+        title: payload.title,
+        slug: payload.slug,
+        date: payload.date,
+        category: payload.category,
+        organizer_id: payload.organizer_id,
+      })}`,
+    );
+
     const event = await Event.create(payload);
+
+    console.log(
+      `[createEvent] after Event.create eventId=${event._id} organizer_contact_email=${event.organizer_contact_email || "<empty>"}`,
+    );
 
     if (event.organizer_contact_email) {
       const eventName = getEventDisplayName(event);
@@ -250,8 +269,15 @@ async function createEvent(req, res) {
       );
     }
 
+    console.log(
+      `[createEvent] before response status=201 eventId=${event._id}`,
+    );
     return res.status(201).json({ event });
   } catch (err) {
+    console.error(
+      `[createEvent] catch errName=${err.name} errMessage=${err.message}`,
+    );
+
     if (err.name === "ValidationError") {
       return res.status(400).json({ message: err.message });
     }
@@ -477,11 +503,12 @@ async function deleteEvent(req, res) {
         `[deleteEvent] ticket summary for event ${id}: ${JSON.stringify(ticketSummary)}`,
       );
 
+      const hasTickets = Boolean(ticketSummary?.has_tickets);
       const totalSold = Number(ticketSummary?.total_sold || 0);
-      if (totalSold > 0) {
+      if (hasTickets || totalSold > 0) {
         return res.status(409).json({
           message:
-            "Cannot delete event because tickets are already sold for this event",
+            "Cannot delete event because tickets already exist or have been sold.",
         });
       }
     } catch (ticketErr) {
@@ -489,7 +516,9 @@ async function deleteEvent(req, res) {
         `[deleteEvent] failed to verify ticket status for event ${id}: ${ticketErr.message}`,
       );
       return res.status(502).json({
-        message: "Unable to verify ticket status before deleting event",
+        message:
+          "Unable to verify ticket status from ticket-service before deleting event",
+        error: ticketErr.message,
       });
     }
 
@@ -571,13 +600,13 @@ async function searchEvents(req, res) {
 }
 
 async function validateEvent(req, res) {
-  const { id } = req.params;
+  const eventId = req.params.id || req.params.eventId;
 
   try {
-    const event = await Event.findById(id);
+    const event = await Event.findById(eventId);
 
     if (!event) {
-      return res.status(404).json({ exists: false });
+      return res.status(404).json({ exists: false, bookable: false });
     }
 
     const isActive = event.status === "published";
@@ -720,15 +749,17 @@ async function cancelEvent(req, res) {
     event.is_published = false;
     await event.save();
 
+    let ticketCancellationResult = null;
+    let ticketCancellationError = null;
+
     // After the event is marked cancelled, request Ticket Service to cancel ticket sales.
     try {
-      const ticketServiceResponse = await cancelEventTickets(
-        event._id.toString(),
-      );
+      ticketCancellationResult = await cancelEventTickets(event._id.toString());
       console.log(
-        `[cancelEvent] Ticket Service bulk cancel success for event ${event._id}: ${JSON.stringify(ticketServiceResponse)}`,
+        `[cancelEvent] Ticket Service bulk cancel success for event ${event._id}: ${JSON.stringify(ticketCancellationResult)}`,
       );
     } catch (ticketErr) {
+      ticketCancellationError = ticketErr.message;
       console.error(
         `[cancelEvent] Ticket Service bulk cancel failed for event ${event._id}: ${ticketErr.message}`,
       );
@@ -780,7 +811,25 @@ async function cancelEvent(req, res) {
       );
     }
 
-    return res.json({ event });
+    if (ticketCancellationError) {
+      return res.status(502).json({
+        message:
+          "Event cancelled, but failed to cancel related tickets in ticket-service",
+        event,
+        ticketCancellation: {
+          success: false,
+          error: ticketCancellationError,
+        },
+      });
+    }
+
+    return res.json({
+      event,
+      ticketCancellation: {
+        success: true,
+        result: ticketCancellationResult,
+      },
+    });
   } catch (err) {
     if (err.name === "CastError") {
       return res.status(400).json({ message: "Invalid event ID" });

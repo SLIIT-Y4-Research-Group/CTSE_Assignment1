@@ -1,21 +1,38 @@
 const Ticket = require("../models/Ticket");
-//const { verifyEvent } = require("../utils/eventService");
-const Event = require("../models/Event");
+const { verifyEvent } = require("../utils/eventService");
 
 exports.createTicket = async (req, res) => {
   try {
     const { event_id } = req.body;
 
-    // Check if event exists directly in DB
-    const event = await Event.findById(event_id);
-    if (!event) {
+    if (!event_id) {
+      return res.status(400).json({ message: "event_id is required" });
+    }
+
+    const eventValidation = await verifyEvent(event_id);
+
+    if (!eventValidation?.exists) {
       return res.status(400).json({ message: "Event not found" });
+    }
+
+    if (eventValidation.bookable === false) {
+      return res.status(400).json({
+        message:
+          "Event is not valid for ticket creation (event must be published and upcoming)",
+      });
     }
 
     // Create ticket
     const ticket = await Ticket.create(req.body);
     res.status(201).json(ticket);
   } catch (error) {
+    if (error.message.includes("Event validation failed")) {
+      return res.status(502).json({
+        message: "Unable to validate event with event-service",
+        error: error.message,
+      });
+    }
+
     console.error("Ticket creation failed:", error.message);
     res.status(500).json({ message: "Ticket creation failed" });
   }
