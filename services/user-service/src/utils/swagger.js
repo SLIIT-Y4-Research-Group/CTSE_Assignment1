@@ -10,8 +10,8 @@ const options = {
     },
     servers: [
       {
-        url: "/",
-        description: "Default server"
+        url: "/api/users",
+        description: "User Service via API Gateway"
       }
     ],
     components: {
