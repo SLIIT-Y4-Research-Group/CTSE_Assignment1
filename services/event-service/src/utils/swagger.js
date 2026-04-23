@@ -30,7 +30,10 @@ const options = {
             venue_name: { type: "string" },
             city: { type: "string" },
             location: { type: "string" },
-            category: { type: "string" },
+            category: {
+              type: "string",
+              enum: ["Concerts", "Theatre", "Family"],
+            },
             banner_image: { type: "string" },
             is_featured: { type: "boolean" },
             is_published: { type: "boolean" },
