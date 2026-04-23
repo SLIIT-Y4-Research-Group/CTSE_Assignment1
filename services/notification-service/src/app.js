@@ -30,7 +30,7 @@ io.on("connection", (socket) => {
 
 app.locals.io = io;
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 const SERVICE_NAME = process.env.SERVICE_NAME || "notification-service";
 const MONGO_URI = process.env.MONGO_URI;
 

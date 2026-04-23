@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3004;
 const SERVICE_NAME = process.env.SERVICE_NAME || "payment-service";
 const MONGO_URI = process.env.MONGO_URI;
 
