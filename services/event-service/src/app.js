@@ -4,6 +4,9 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const swaggerUi = require("swagger-ui-express");
+const eventRoutes = require("./routes/eventRoutes");
+const { swaggerSpec } = require("./swagger");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +17,8 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use("/api", eventRoutes);
 
 mongoose
   .connect(MONGO_URI)
@@ -27,14 +32,14 @@ mongoose
 app.get("/", (req, res) => {
   res.json({
     service: SERVICE_NAME,
-    message: `${SERVICE_NAME} is running`
+    message: `${SERVICE_NAME} is running`,
   });
 });
 
 app.get("/health", (req, res) => {
   res.json({
     service: SERVICE_NAME,
-    status: "ok"
+    status: "ok",
   });
 });
 
@@ -44,7 +49,7 @@ app.get("/db-check", (req, res) => {
   res.json({
     service: SERVICE_NAME,
     dbConnected: state === 1,
-    mongoState: state
+    mongoState: state,
   });
 });
 

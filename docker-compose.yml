@@ -48,7 +48,6 @@ services:
       - ems-network
     depends_on:
       - notification-service
-      - reporting-service
 
   notification-service:
     build:
@@ -58,17 +57,6 @@ services:
       - "3005:3000"
     env_file:
       - ./services/notification-service/.env
-    networks:
-      - ems-network
-
-  reporting-service:
-    build:
-      context: ./services/reporting-service
-    container_name: reporting-service
-    ports:
-      - "3006:3000"
-    env_file:
-      - ./services/reporting-service/.env
     networks:
       - ems-network
 
@@ -84,7 +72,6 @@ services:
       - ticket-service
       - payment-service
       - notification-service
-      - reporting-service
     networks:
       - ems-network
 

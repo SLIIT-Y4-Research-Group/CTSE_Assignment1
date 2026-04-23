@@ -1,0 +1,39 @@
+services:
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: user-service
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./services/user-service/.env
+    networks:
+      - ems-network
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: notification-service
+    ports:
+      - "3005:3000"
+    env_file:
+      - ./services/notification-service/.env
+    networks:
+      - ems-network
+
+  api-gateway:
+    image: nginx:stable-alpine
+    container_name: api-gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./api-gateway/nginx.core.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - user-service
+      - notification-service
+    networks:
+      - ems-network
+
+networks:
+  ems-network:
+    driver: bridge

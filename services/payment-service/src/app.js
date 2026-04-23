@@ -5,10 +5,14 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
 
+const paymentRoutes = require("./routes/paymentRoutes");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SERVICE_NAME = process.env.SERVICE_NAME || "service";
+const SERVICE_NAME = process.env.SERVICE_NAME || "payment-service";
 const MONGO_URI = process.env.MONGO_URI;
+
+app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(cors());
@@ -27,14 +31,14 @@ mongoose
 app.get("/", (req, res) => {
   res.json({
     service: SERVICE_NAME,
-    message: `${SERVICE_NAME} is running`
+    message: `${SERVICE_NAME} is running`,
   });
 });
 
 app.get("/health", (req, res) => {
   res.json({
     service: SERVICE_NAME,
-    status: "ok"
+    status: "ok",
   });
 });
 
@@ -44,10 +48,12 @@ app.get("/db-check", (req, res) => {
   res.json({
     service: SERVICE_NAME,
     dbConnected: state === 1,
-    mongoState: state
+    mongoState: state,
   });
 });
 
-app.listen(PORT, () => {
+app.use("/api/payments", paymentRoutes);
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`${SERVICE_NAME} running on port ${PORT}`);
 });
