@@ -15,7 +15,6 @@ const MONGO_URI = process.env.MONGO_URI;
 app.set("trust proxy", 1);
 
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
