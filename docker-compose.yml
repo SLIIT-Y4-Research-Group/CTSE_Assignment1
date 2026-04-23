@@ -4,7 +4,7 @@ services:
       context: ./services/user-service
     container_name: user-service
     ports:
-      - "3001:3000"
+      - "3001:3001"
     env_file:
       - ./services/user-service/.env
     networks:
@@ -15,7 +15,7 @@ services:
       context: ./services/event-service
     container_name: event-service
     ports:
-      - "3002:3000"
+      - "3002:3002"
     env_file:
       - ./services/event-service/.env
     networks:
@@ -26,7 +26,7 @@ services:
       context: ./services/ticket-service
     container_name: ticket-service
     ports:
-      - "3003:3000"
+      - "3003:3003"
     env_file:
       - ./services/ticket-service/.env
     networks:
@@ -41,7 +41,7 @@ services:
       context: ./services/payment-service
     container_name: payment-service
     ports:
-      - "3004:3000"
+      - "3004:3004"
     env_file:
       - ./services/payment-service/.env
     networks:
@@ -54,7 +54,7 @@ services:
       context: ./services/notification-service
     container_name: notification-service
     ports:
-      - "3005:3000"
+      - "3005:3005"
     env_file:
       - ./services/notification-service/.env
     networks:

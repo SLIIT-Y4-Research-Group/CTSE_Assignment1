@@ -13,7 +13,7 @@ const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const SERVICE_NAME = process.env.SERVICE_NAME || "user-service";
 const MONGO_URI = process.env.MONGO_URI;
 
