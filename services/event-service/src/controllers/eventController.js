@@ -9,6 +9,9 @@ const {
 } = require("../utils/ticketClient");
 const { uploadBufferToCloudinary } = require("../utils/cloudinary");
 
+const DEFAULT_EMAIL_LOGO_URL =
+  "https://dummyimage.com/180x44/ffffff/111827.png&text=Event+Management";
+
 function getEventDisplayName(event) {
   return event.title || event.event_name || "Your event";
 }
@@ -28,13 +31,82 @@ function formatFieldValue(key, value) {
   }
 
   if (key === "date") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
+    return formatHumanDate(value);
+  }
+
+  if (key === "time") {
+    return formatHumanTime(value);
   }
 
   return String(value);
+}
+
+function formatHumanDate(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+function formatHumanTime(value) {
+  if (value === null || value === undefined || value === "") {
+    return "N/A";
+  }
+
+  if (value instanceof Date) {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "UTC",
+    }).format(value);
+  }
+
+  const raw = String(value).trim();
+
+  // Convert 24-hour values like 19:00 or 19:00:00 to 7:00 PM.
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (twentyFourHourMatch) {
+    const hour = Number(twentyFourHourMatch[1]);
+    const minute = Number(twentyFourHourMatch[2]);
+
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      const marker = hour >= 12 ? "PM" : "AM";
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${String(minute).padStart(2, "0")} ${marker}`;
+    }
+  }
+
+  // Normalize values like 7:00pm, 7 PM, 07:00 Am.
+  const twelveHourMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([aApP][mM])$/);
+  if (twelveHourMatch) {
+    const hour = Number(twelveHourMatch[1]);
+    const minute = Number(twelveHourMatch[2] || "0");
+    const marker = twelveHourMatch[3].toUpperCase();
+
+    if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+      return `${hour}:${String(minute).padStart(2, "0")} ${marker}`;
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "UTC",
+    }).format(parsed);
+  }
+
+  return raw;
 }
 
 function getCurrentEventDetailEntries(event) {
@@ -66,9 +138,23 @@ function buildDetailsHtml(entries) {
   return entries
     .map(
       (entry) =>
-        `<p style=\"margin: 6px 0;\"><strong>${escapeHtml(entry.label)}:</strong> ${escapeHtml(entry.value)}</p>`,
+        `<tr><td style=\"padding: 8px 0; color: #6b7280; font-size: 14px; width: 140px; vertical-align: top;\">${escapeHtml(entry.label)}</td><td style=\"padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;\">${escapeHtml(entry.value)}</td></tr>`,
     )
     .join("");
+}
+
+function getEmailLogoUrl() {
+  const configured = process.env.EMAIL_LOGO_URL;
+  if (!configured) {
+    return DEFAULT_EMAIL_LOGO_URL;
+  }
+
+  const trimmed = configured.trim();
+  if (!trimmed) {
+    return DEFAULT_EMAIL_LOGO_URL;
+  }
+
+  return trimmed;
 }
 
 function buildEmailHtml({
@@ -93,19 +179,51 @@ function buildEmailHtml({
       : messageType === "warning"
         ? "#ffd59e"
         : "#d1d5db";
+  const logoUrl = getEmailLogoUrl();
 
   return `
-<div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 640px; margin: 0 auto;">
-  <h2 style="margin: 0 0 12px; color: #111827;">${escapeHtml(heading)}</h2>
-  <p style="margin: 0 0 16px;">${escapeHtml(intro)}</p>
-  ${messageText ? `<div style="background: ${messageBg}; border: 1px solid ${messageBorder}; border-radius: 8px; padding: 12px; margin: 0 0 16px;"><strong>${escapeHtml(messageText)}</strong></div>` : ""}
-  ${extraSectionTitle && extraSectionHtml ? `<div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin: 0 0 16px;"><h3 style="margin: 0 0 10px; font-size: 16px;">${escapeHtml(extraSectionTitle)}</h3>${extraSectionHtml}</div>` : ""}
-  <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin: 0 0 16px;">
-    <h3 style="margin: 0 0 10px; font-size: 16px;">${escapeHtml(detailsTitle)}</h3>
-    ${buildDetailsHtml(detailsEntries)}
-  </div>
-  <p style="margin: 0; color: #6b7280; font-size: 13px;">Event Management System</p>
+<div style="margin: 0; padding: 24px 12px; background-color: #f3f4f6; font-family: Arial, Helvetica, sans-serif; color: #111827;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 680px; margin: 0 auto; border-collapse: collapse;">
+    <tr>
+      <td style="background: #111827; padding: 20px 24px; border-radius: 12px 12px 0 0;">
+        <img src="${escapeHtml(logoUrl)}" alt="Event Management System" style="display: block; height: 34px; width: auto; max-width: 220px;" />
+      </td>
+    </tr>
+    <tr>
+      <td style="background: #ffffff; padding: 24px; border: 1px solid #e5e7eb; border-top: 0; border-radius: 0 0 12px 12px;">
+        <h2 style="margin: 0 0 10px; font-size: 24px; color: #111827; line-height: 1.25;">${escapeHtml(heading)}</h2>
+        <p style="margin: 0 0 18px; color: #374151; font-size: 15px; line-height: 1.6;">${escapeHtml(intro)}</p>
+
+        ${messageText ? `<div style="background: ${messageBg}; border: 1px solid ${messageBorder}; border-radius: 10px; padding: 12px 14px; margin: 0 0 18px; color: #111827; font-size: 14px; line-height: 1.5;"><strong>${escapeHtml(messageText)}</strong></div>` : ""}
+
+        ${extraSectionTitle && extraSectionHtml ? `<div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 0 0 18px; background: #fafafa;"><h3 style="margin: 0 0 10px; font-size: 16px; color: #111827;">${escapeHtml(extraSectionTitle)}</h3>${extraSectionHtml}</div>` : ""}
+
+        <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 0 0 20px; background: #ffffff;">
+          <h3 style="margin: 0 0 10px; font-size: 16px; color: #111827;">${escapeHtml(detailsTitle)}</h3>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
+            ${buildDetailsHtml(detailsEntries)}
+          </table>
+        </div>
+
+        <p style="margin: 0; color: #6b7280; font-size: 12px; line-height: 1.6; border-top: 1px solid #e5e7eb; padding-top: 12px;">
+          This is an automated message from Event Management System.
+        </p>
+      </td>
+    </tr>
+  </table>
 </div>`.trim();
+}
+
+function buildChangedFieldHtml(changedFieldEntries) {
+  return `
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
+  ${changedFieldEntries
+    .map(
+      (change) =>
+        `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 140px; vertical-align: top;">${escapeHtml(change.label)}</td><td style="padding: 8px 0; color: #111827; font-size: 14px;"><span style="color: #6b7280;">${escapeHtml(change.oldValue)}</span> <span style="color: #9ca3af;">-></span> <strong style="color: #111827;">${escapeHtml(change.newValue)}</strong></td></tr>`,
+    )
+    .join("")}
+</table>`.trim();
 }
 
 function getAuthenticatedUserId(req) {
@@ -412,12 +530,7 @@ async function updateEvent(req, res) {
               `${change.label}: ${change.oldValue} -> ${change.newValue}`,
           )
           .join("\n");
-        const changedDetailsHtml = changedFieldEntries
-          .map(
-            (change) =>
-              `<p style=\"margin: 6px 0;\"><strong>${escapeHtml(change.label)}:</strong> ${escapeHtml(change.oldValue)} -> ${escapeHtml(change.newValue)}</p>`,
-          )
-          .join("");
+        const changedDetailsHtml = buildChangedFieldHtml(changedFieldEntries);
 
         try {
           await sendEventEmailNotification({
