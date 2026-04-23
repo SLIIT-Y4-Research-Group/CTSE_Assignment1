@@ -14,6 +14,7 @@ const SERVICE_NAME = process.env.SERVICE_NAME || "service";
 const MONGO_URI = process.env.MONGO_URI;
 
 app.use(helmet());
+app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
