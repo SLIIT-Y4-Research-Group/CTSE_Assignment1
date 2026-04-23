@@ -1,7 +1,10 @@
 const express = require("express");
 const {
+  uploadBanner,
   createEvent,
   getAllEvents,
+  getAllEventsForManagement,
+  searchEventsForManagement,
   getFeaturedEvents,
   getUpcomingEvents,
   getEventsByOrganizer,
@@ -14,8 +17,16 @@ const {
   cancelEvent,
 } = require("../controllers/eventController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
+const { uploadBannerMiddleware } = require("../middleware/uploadBanner");
 
 const router = express.Router();
+
+function logCreateEventRouteEntry(req, res, next) {
+  console.log(
+    `[route:createEvent] ${req.method} ${req.originalUrl} bodyKeys=${Object.keys(req.body || {}).join(",")}`,
+  );
+  return next();
+}
 
 /**
  * @openapi
@@ -50,6 +61,7 @@ const router = express.Router();
  *                 type: string
  *               category:
  *                 type: string
+ *                 enum: [Concerts, Theatre, Family]
  *               banner_image:
  *                 type: string
  *               is_featured:
@@ -65,7 +77,7 @@ const router = express.Router();
  *             time: 10:00 AM
  *             venue_name: Grand Expo Center
  *             city: Colombo
- *             category: Technology
+ *             category: Concerts
  *             banner_image: https://cdn.example.com/events/tech-summit.jpg
  *             is_featured: true
  *             organizer_id: org_1001
@@ -89,7 +101,20 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post("/events", requireAuth, requireRole(["event_manager", "admin"]), createEvent);
+router.post(
+  "/events",
+  logCreateEventRouteEntry,
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  createEvent,
+);
+router.post(
+  "/events/upload-banner",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  uploadBannerMiddleware,
+  uploadBanner,
+);
 
 /**
  * @openapi
@@ -112,6 +137,18 @@ router.post("/events", requireAuth, requireRole(["event_manager", "admin"]), cre
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events", getAllEvents);
+router.get(
+  "/events/manage/all",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  getAllEventsForManagement,
+);
+router.get(
+  "/events/manage/search",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  searchEventsForManagement,
+);
 
 /**
  * @openapi
@@ -173,6 +210,7 @@ router.get("/events/upcoming", getUpcomingEvents);
  *         name: category
  *         schema:
  *           type: string
+ *           enum: [Concerts, Theatre, Family]
  *         description: Event category filter
  *       - in: query
  *         name: date
@@ -312,6 +350,7 @@ router.get("/events/:id", getEventById);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events/:id/validate", validateEvent);
+router.get("/events/:eventId/validate", validateEvent);
 
 /**
  * @openapi
@@ -356,7 +395,7 @@ router.patch(
   "/events/:id/publish",
   requireAuth,
   requireRole(["event_manager", "admin"]),
-  publishEvent
+  publishEvent,
 );
 
 /**
@@ -402,7 +441,7 @@ router.patch(
   "/events/:id/cancel",
   requireAuth,
   requireRole(["event_manager", "admin"]),
-  cancelEvent
+  cancelEvent,
 );
 
 /**
@@ -464,7 +503,12 @@ router.patch(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), updateEvent);
+router.put(
+  "/events/:id",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  updateEvent,
+);
 
 /**
  * @openapi
@@ -505,6 +549,11 @@ router.put("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), 
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete("/events/:id", requireAuth, requireRole(["event_manager", "admin"]), deleteEvent);
+router.delete(
+  "/events/:id",
+  requireAuth,
+  requireRole(["event_manager", "admin"]),
+  deleteEvent,
+);
 
 module.exports = router;

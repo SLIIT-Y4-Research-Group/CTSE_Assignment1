@@ -1,0 +1,5 @@
+PORT=3000
+SERVICE_NAME=notification-service
+
+
+MONGO_URI=mongodb+srv://dew:dew123@cluster0.ipvuvy1.mongodb.net/notification_service_db?appName=Cluster0

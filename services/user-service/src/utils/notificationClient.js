@@ -1,7 +1,9 @@
 const axios = require("axios");
 
 function getNotificationBaseUrl() {
-  return process.env.NOTIFICATION_SERVICE_URL || "http://localhost:8080/api/notifications";
+  return (
+    process.env.NOTIFICATION_SERVICE_URL || "http://notification-service:3000"
+  );
 }
 
 async function sendNewUserEmail({ to, name, email, password, roleName }) {
@@ -20,7 +22,7 @@ async function sendNewUserEmail({ to, name, email, password, roleName }) {
   await axios.post(
     `${baseUrl}/api/notify/email`,
     { to, subject, text },
-    { timeout: 10000 }
+    { timeout: 10000 },
   );
 }
 
