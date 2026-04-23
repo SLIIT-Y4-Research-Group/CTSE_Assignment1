@@ -11,7 +11,6 @@ connectDB();
 
 const app = express();
 const SERVICE_NAME = process.env.SERVICE_NAME || "ticket-service";
-app.use(cors());
 app.use(express.json());
 
 app.use("/api/tickets", ticketRoutes);
