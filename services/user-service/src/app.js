@@ -5,7 +5,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
 const swaggerUi = require("swagger-ui-express");
-
+//swagger documenttation
 const { ensureDefaultRoles } = require("./utils/ensureRoles");
 const { swaggerSpec } = require("./utils/swagger");
 const authRoutes = require("./routes/authRoutes");
