@@ -1,57 +1,69 @@
 const Payment = require("../models/Payment");
 const stripe = require("../utils/stripe");
+const { sendPaymentInvoiceEmail } = require("../utils/notificationClient");
 
-const createCheckoutSession = async (req, res) => {
+async function createCheckoutSession(req, res) {
   try {
-    const { user_id, event_id, ticket_id, quantity, total_amount } = req.body;
+    const {
+      user_id,
+      user_email,
+      event_id,
+      ticket_id,
+      quantity = 1,
+      total_amount,
+      currency = "LKR",
+    } = req.body;
 
-    if (!user_id || !event_id || !ticket_id || !quantity || !total_amount) {
+    if (!user_id || !user_email || !event_id || !ticket_id || !total_amount) {
       return res.status(400).json({
-        success: false,
-        message: "user_id, event_id, ticket_id, quantity, and total_amount are required",
-      });
-    }
-
-    if (Number(quantity) <= 0 || Number(total_amount) <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "quantity and total_amount must be greater than 0",
+        message:
+          "user_id, user_email, event_id, ticket_id, and total_amount are required",
       });
     }
 
     const payment = await Payment.create({
       user_id,
+      user_email,
       event_id,
       ticket_id,
-      quantity: Number(quantity),
-      total_amount: Number(total_amount),
+      quantity,
+      total_amount,
+      currency,
       payment_status: "PENDING",
     });
-
-    const unitAmount = Math.round((Number(total_amount) / Number(quantity)) * 100);
-    const frontendUrl = process.env.FRONTEND_URL;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
+
       line_items: [
         {
           price_data: {
-            currency: "lkr",
+            currency: currency.toLowerCase(),
             product_data: {
-              name: "Event Ticket Payment",
-              description: `Event: ${event_id} | Ticket: ${ticket_id}`,
+              name: `Ticket Payment - Event ${event_id}`,
+              description: `Ticket ID: ${ticket_id}, Quantity: ${quantity}`,
             },
-            unit_amount: unitAmount,
+            unit_amount: Math.round(total_amount * 100),
           },
-          quantity: Number(quantity),
+          quantity: 1,
         },
       ],
-      success_url: `${frontendUrl}/dashboard?payment=success`,
-      cancel_url: `${frontendUrl}/payment?payment=cancelled`,
+
+      customer_email: user_email,
+
+      success_url: `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/payment-success?session_id={CHECKOUT_SESSION_ID}&payment_id=${payment._id}`,
+
+      cancel_url: `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/payment-cancel?payment_id=${payment._id}`,
+
       metadata: {
         payment_id: payment._id.toString(),
         user_id,
+        user_email,
         event_id,
         ticket_id,
       },
@@ -61,100 +73,106 @@ const createCheckoutSession = async (req, res) => {
     await payment.save();
 
     return res.status(201).json({
-      success: true,
-      message: "Checkout session created successfully",
+      message: "Checkout session created",
       payment,
-      checkout_url: session.url,
-      session_id: session.id,
+      checkoutUrl: session.url,
+      sessionId: session.id,
     });
-  } catch (error) {
-    console.error("Create checkout session error:", error.message);
+  } catch (err) {
+    console.error("Create checkout session error:", err);
     return res.status(500).json({
-      success: false,
       message: "Failed to create checkout session",
-      error: error.message,
+      error: err.message,
     });
   }
-};
+}
 
-const getPaymentById = async (req, res) => {
+async function confirmPaymentSession(req, res) {
   try {
-    const payment = await Payment.findById(req.params.id);
+    const { session_id, payment_id } = req.body;
 
-    if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: "Payment not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      payment,
-    });
-  } catch (error) {
-    console.error("Get payment error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch payment",
-      error: error.message,
-    });
-  }
-};
-
-const confirmPaymentSession = async (req, res) => {
-  try {
-    const { session_id } = req.body;
-
-    if (!session_id) {
+    if (!session_id && !payment_id) {
       return res.status(400).json({
-        success: false,
-        message: "session_id is required",
+        message: "session_id or payment_id is required",
       });
     }
 
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-    const payment = await Payment.findOne({ stripe_session_id: session_id });
+    let payment;
+
+    if (payment_id) {
+      payment = await Payment.findById(payment_id);
+    } else {
+      payment = await Payment.findOne({ stripe_session_id: session_id });
+    }
 
     if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: "Payment record not found for this session",
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(
+      session_id || payment.stripe_session_id
+    );
+
+    if (session.payment_status !== "paid") {
+      payment.payment_status = "FAILED";
+      await payment.save();
+
+      return res.status(400).json({
+        message: "Payment is not completed",
+        stripePaymentStatus: session.payment_status,
+        payment,
       });
     }
 
-    if (session.payment_status === "paid") {
-      payment.payment_status = "PAID";
-      payment.stripe_payment_intent_id = session.payment_intent;
-    } else if (session.status === "expired") {
-      payment.payment_status = "FAILED";
-    }
-
+    payment.payment_status = "PAID";
+    payment.stripe_payment_intent_id = session.payment_intent;
     await payment.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Payment status checked successfully",
-      payment_status: payment.payment_status,
+    let invoiceEmailStatus = "sent";
+
+    try {
+      await sendPaymentInvoiceEmail(payment);
+    } catch (err) {
+      console.error("Invoice email failed:", err.message);
+      invoiceEmailStatus = "failed";
+    }
+
+    return res.json({
+      message: "Payment confirmed",
       payment,
-      stripe_session: {
-        id: session.id,
-        payment_status: session.payment_status,
-        status: session.status,
-      },
+      invoiceEmailStatus,
     });
-  } catch (error) {
-    console.error("Confirm payment error:", error.message);
+  } catch (err) {
+    console.error("Confirm payment error:", err);
     return res.status(500).json({
-      success: false,
       message: "Failed to confirm payment",
-      error: error.message,
+      error: err.message,
     });
   }
-};
+}
+
+async function getPaymentById(req, res) {
+  try {
+    const { id } = req.params;
+
+    const payment = await Payment.findById(id);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    return res.json({ payment });
+  } catch (err) {
+    console.error("Get payment error:", err);
+    return res.status(500).json({
+      message: "Failed to get payment",
+      error: err.message,
+    });
+  }
+}
 
 module.exports = {
   createCheckoutSession,
-  getPaymentById,
   confirmPaymentSession,
+  getPaymentById,
 };
